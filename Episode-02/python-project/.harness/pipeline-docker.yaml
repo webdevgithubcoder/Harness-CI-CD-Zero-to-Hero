@@ -141,7 +141,7 @@ pipeline:
                       sleep 60
                       echo "=== Done waiting! Proceeding to cleanup ==="
 
-              # Step 7: Delete Docker Hub repository image and verify
+                          # Step 7: Delete Docker Hub repository image and verify
               - step:
                   type: Run
                   name: Delete and Verify
@@ -151,14 +151,28 @@ pipeline:
                     command: |-
                       echo "=== Step 7: Deleting Docker Hub Image ==="
                       echo ""
-                      TOKEN=$(curl -s -H "Content-Type: application/json" -X POST -d '{"username":"<+variable.docker_username>","password":"<+secrets.getValue("docker-hub-password")>"}' https://hub.docker.com/v2/users/login/ | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
-                      echo "Logged in to Docker Hub API"
-                      echo ""
-                      echo "Deleting entire repository: <+variable.docker_username>/python-harness-app"
-                      curl -s -X DELETE -H "Authorization: JWT $TOKEN" https://hub.docker.com/v2/repositories/<+variable.docker_username>/python-harness-app/
-                      echo ""
-                      echo "=== Repository Deleted! ==="
-                      echo "Next run will create it fresh again."
+                      
+                      RESPONSE=$(curl -s -H "Content-Type: application/json" -X POST \
+                        -d '{"username":"<+variable.docker_username>","password":"<+secrets.getValue("docker-hub-password")>"}' \
+                        https://hub.docker.com/v2/users/login/)
+                      
+                      if echo "$RESPONSE" | grep -q '"token"'; then
+                        TOKEN=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+                        echo "Logged in to Docker Hub API successfully"
+                        echo ""
+                        echo "Deleting entire repository: <+variable.docker_username>/python-harness-app"
+                        curl -s -X DELETE -H "Authorization: JWT $TOKEN" \
+                          https://hub.docker.com/v2/repositories/<+variable.docker_username>/python-harness-app/
+                        echo ""
+                        echo "=== Repository Deleted! ==="
+                        echo "Next run will create it fresh again."
+                      else
+                        echo "WARNING: Docker Hub API login failed"
+                        echo "Response: $RESPONSE"
+                        echo ""
+                        echo "Skipping cleanup - the pushed image will remain on Docker Hub."
+                      fi
+
 
               # Step 8: Final verification - confirm images are gone from Docker Hub
               - step:
